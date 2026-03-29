@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>経費精算システム</title>
+  <style>
+    :root {
+      --primary: #4472C4;
+      --primary-dark: #3461a8;
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --text: #1a1a2e;
+      --text-light: #6b7280;
+      --border: #e5e7eb;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    /* Layout */
+    .app { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 220px; background: var(--text); color: #fff;
+      padding: 24px 0; flex-shrink: 0;
+    }
+    .sidebar h1 { font-size: 16px; padding: 0 20px 20px; border-bottom: 1px solid #333; margin-bottom: 8px; }
+    .sidebar a {
+      display: block; padding: 12px 20px; color: #ccc; text-decoration: none;
+      font-size: 14px; transition: all 0.2s;
+    }
+    .sidebar a:hover, .sidebar a.active { background: var(--primary); color: #fff; }
+    .main { flex: 1; padding: 32px; max-width: 1100px; }
+    .main h2 { font-size: 24px; margin-bottom: 24px; }
+
+    /* Cards */
+    .card {
+      background: var(--card); border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 20px;
+    }
+    .card h3 { font-size: 16px; margin-bottom: 16px; color: var(--text); }
+
+    /* Form */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    label { font-size: 13px; font-weight: 600; color: var(--text-light); }
+    input, select, textarea {
+      padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 14px; font-family: inherit; transition: border 0.2s;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--primary); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; border: none; border-radius: 8px;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+      font-family: inherit;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; font-size: 12px; padding: 6px 12px; }
+    .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--bg); }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; }
+    th { background: var(--primary); color: #fff; font-size: 13px; padding: 10px 12px; text-align: left; }
+    th:first-child { border-radius: 8px 0 0 0; }
+    th:last-child { border-radius: 0 8px 0 0; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    tr:hover td { background: #f0f4ff; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    /* Metric */
+    .metrics { display: flex; gap: 16px; margin-bottom: 20px; }
+    .metric {
+      flex: 1; background: var(--card); border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .metric .label { font-size: 13px; color: var(--text-light); margin-bottom: 4px; }
+    .metric .value { font-size: 28px; font-weight: 700; color: var(--primary); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+    .tab {
+      padding: 10px 20px; border: none; background: var(--bg); border-radius: 8px 8px 0 0;
+      cursor: pointer; font-size: 14px; font-weight: 500; font-family: inherit;
+    }
+    .tab.active { background: var(--card); color: var(--primary); font-weight: 700; }
+
+    .actions { display: flex; gap: 8px; margin-top: 16px; }
+    .toast {
+      position: fixed; top: 20px; right: 20px; background: var(--success); color: #fff;
+      padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600;
+      opacity: 0; transition: opacity 0.3s; z-index: 100;
+    }
+    .toast.show { opacity: 1; }
+    .empty { text-align: center; padding: 40px; color: var(--text-light); }
+    .filter-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: end; }
+    .filter-row .form-group { flex: 1; }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { padding: 16px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .metrics { flex-direction: column; }
+      .filter-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar">
+      <h1>経費精算</h1>
+      <a href="#" class="active" onclick="showPage('register')">📝 領収書登録</a>
+      <a href="#" onclick="showPage('list')">📋 経費一覧</a>
+      <a href="#" onclick="showPage('report')">📊 レポート生成</a>
+    </nav>
+    <div class="main" id="content"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ===== Data Store (localStorage) =====
+    const STORAGE_KEY = 'expense_data';
+    const CATEGORIES = ['交通費','交際費','会議費','消耗品費','通信費','旅費交通費','新聞図書費','雑費','その他'];
+
+    function loadExpenses() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    }
+    function saveExpenses(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+    function addExpenseData(exp) {
+      const data = loadExpenses();
+      exp.id = Date.now();
+      data.push(exp);
+      saveExpenses(data);
+      return exp;
+    }
+    function deleteExpenseData(id) {
+      saveExpenses(loadExpenses().filter(e => e.id !== id));
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    function today() { return new Date().toISOString().slice(0, 10); }
+    function monthStart() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
+
+    // ===== Pages =====
+    function showPage(page) {
+      document.querySelectorAll('.sidebar a').forEach((a, i) => {
+        a.classList.toggle('active', (page === 'register' && i === 0) || (page === 'list' && i === 1) || (page === 'report' && i === 2));
+      });
+      const c = document.getElementById('content');
+      if (page === 'register') renderRegister(c);
+      else if (page === 'list') renderList(c);
+      else if (page === 'report') renderReport(c);
+    }
+
+    // --- Register Page ---
+    function renderRegister(c) {
+      c.innerHTML = `
+        <h2>領収書登録</h2>
+        <div class="card">
+          <h3>経費入力</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>日付</label>
+              <input type="date" id="reg-date" value="${today()}">
+            </div>
+            <div class="form-group">
+              <label>支払先</label>
+              <input type="text" id="reg-vendor" placeholder="例: スターバックス">
+            </div>
+            <div class="form-group">
+              <label>金額（円）</label>
+              <input type="number" id="reg-amount" min="0" placeholder="1000">
+            </div>
+            <div class="form-group">
+              <label>科目</label>
+              <select id="reg-category">
+                ${CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>摘要</label>
+              <input type="text" id="reg-desc" placeholder="例: 打ち合わせ">
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" onclick="registerExpense()">登録する</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function registerExpense() {
+      const date = document.getElementById('reg-date').value;
+      const vendor = document.getElementById('reg-vendor').value;
+      const amount = parseInt(document.getElementById('reg-amount').value) || 0;
+      const category = document.getElementById('reg-category').value;
+      const description = document.getElementById('reg-desc').value;
+      if (!amount) { toast('金額を入力してください'); return; }
+      addExpenseData({ date, vendor, amount, category, description });
+      toast('経費を登録しました！');
+      document.getElementById('reg-vendor').value = '';
+      document.getElementById('reg-amount').value = '';
+      document.getElementById('reg-desc').value = '';
+    }
+
+    // --- List Page ---
+    function renderList(c) {
+      const expenses = loadExpenses();
+      const total = expenses.reduce((s, e) => s + e.amount, 0);
+      c.innerHTML = `
+        <h2>経費一覧</h2>
+        <div class="filter-row">
+          <div class="form-group"><label>開始日</label><input type="date" id="f-start" value="${monthStart()}" onchange="filterList()"></div>
+          <div class="form-group"><label>終了日</label><input type="date" id="f-end" value="${today()}" onchange="filterList()"></div>
+          <div class="form-group"><label>科目</label>
+            <select id="f-cat" onchange="filterList()">
+              <option value="">すべて</option>
+              ${CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="label">合計金額</div><div class="value" id="m-total">¥${total.toLocaleString()}</div></div>
+          <div class="metric"><div class="label">件数</div><div class="value" id="m-count">${expenses.length}件</div></div>
+        </div>
+        <div class="card" id="list-table"></div>
+      `;
+      filterList();
+    }
+
+    function filterList() {
+      const start = document.getElementById('f-start').value;
+      const end = document.getElementById('f-end').value;
+      const cat = document.getElementById('f-cat').value;
+      let data = loadExpenses();
+      if (start) data = data.filter(e => e.date >= start);
+      if (end) data = data.filter(e => e.date <= end);
+      if (cat) data = data.filter(e => e.category === cat);
+      data.sort((a, b) => b.date.localeCompare(a.date));
+
+      const total = data.reduce((s, e) => s + e.amount, 0);
+      document.getElementById('m-total').textContent = `¥${total.toLocaleString()}`;
+      document.getElementById('m-count').textContent = `${data.length}件`;
+
+      const el = document.getElementById('list-table');
+      if (!data.length) { el.innerHTML = '<div class="empty">該当する経費データがありません</div>'; return; }
+      el.innerHTML = `<table>
+        <tr><th>日付</th><th>支払先</th><th>科目</th><th class="text-right">金額</th><th>摘要</th><th class="text-center">操作</th></tr>
+        ${data.map(e => `<tr>
+          <td>${e.date}</td><td>${e.vendor}</td><td>${e.category}</td>
+          <td class="text-right">¥${e.amount.toLocaleString()}</td>
+          <td>${e.description || ''}</td>
+          <td class="text-center"><button class="btn btn-danger" onclick="delExpense(${e.id})">削除</button></td>
+        </tr>`).join('')}
+      </table>`;
+    }
+
+    function delExpense(id) {
+      if (!confirm('この経費を削除しますか？')) return;
+      deleteExpenseData(id);
+      renderList(document.getElementById('content'));
+      toast('削除しました');
+    }
+
+    // --- Report Page ---
+    function renderReport(c) {
+      c.innerHTML = `
+        <h2>レポート生成</h2>
+        <div class="card">
+          <h3>出力設定</h3>
+          <div class="form-grid">
+            <div class="form-group"><label>開始日</label><input type="date" id="r-start" value="${monthStart()}"></div>
+            <div class="form-group"><label>終了日</label><input type="date" id="r-end" value="${today()}"></div>
+            <div class="form-group"><label>会社名</label><input type="text" id="r-company" placeholder="株式会社アドネス"></div>
+            <div class="form-group"><label>申請者名</label><input type="text" id="r-applicant" placeholder="瀧田"></div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" onclick="downloadExcel()">📥 Excel精算書</button>
+            <button class="btn btn-success" onclick="downloadPDF()">📥 PDF精算書</button>
+          </div>
+        </div>
+        <div class="card" id="report-summary"></div>
+      `;
+      updateReportSummary();
+    }
+
+    function getReportExpenses() {
+      const start = document.getElementById('r-start').value;
+      const end = document.getElementById('r-end').value;
+      let data = loadExpenses();
+      if (start) data = data.filter(e => e.date >= start);
+      if (end) data = data.filter(e => e.date <= end);
+      return data;
+    }
+
+    function updateReportSummary() {
+      const data = getReportExpenses();
+      const el = document.getElementById('report-summary');
+      if (!data.length) { el.innerHTML = '<div class="empty">対象期間の経費データがありません</div>'; return; }
+      const total = data.reduce((s, e) => s + e.amount, 0);
+      const cats = {};
+      data.forEach(e => { cats[e.category] = (cats[e.category] || 0) + e.amount; });
+      el.innerHTML = `
+        <h3>集計プレビュー（${data.length}件 / 合計 ¥${total.toLocaleString()}）</h3>
+        <table>
+          <tr><th>科目</th><th class="text-center">件数</th><th class="text-right">金額</th></tr>
+          ${Object.entries(cats).sort().map(([cat, amt]) => `<tr>
+            <td>${cat}</td>
+            <td class="text-center">${data.filter(e=>e.category===cat).length}</td>
+            <td class="text-right">¥${amt.toLocaleString()}</td>
+          </tr>`).join('')}
+        </table>
+      `;
+    }
+
+    async function downloadExcel() {
+      const data = getReportExpenses();
+      if (!data.length) { toast('対象データがありません'); return; }
+      try {
+        const res = await fetch('/api/generate_excel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expenses: data,
+            company: document.getElementById('r-company').value,
+            applicant: document.getElementById('r-applicant').value,
+            period_start: document.getElementById('r-start').value,
+            period_end: document.getElementById('r-end').value,
+          }),
+        });
+        const json = await res.json();
+        downloadBase64(json.data, `経費精算書.xlsx`,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        toast('Excelをダウンロードしました');
+      } catch(e) { toast('エラーが発生しました: ' + e.message); }
+    }
+
+    async function downloadPDF() {
+      const data = getReportExpenses();
+      if (!data.length) { toast('対象データがありません'); return; }
+      try {
+        const res = await fetch('/api/generate_pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            expenses: data,
+            company: document.getElementById('r-company').value,
+            applicant: document.getElementById('r-applicant').value,
+            period_start: document.getElementById('r-start').value,
+            period_end: document.getElementById('r-end').value,
+          }),
+        });
+        const json = await res.json();
+        downloadBase64(json.data, `経費精算書.pdf`, 'application/pdf');
+        toast('PDFをダウンロードしました');
+      } catch(e) { toast('エラーが発生しました: ' + e.message); }
+    }
+
+    function downloadBase64(b64, filename, mime) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Init
+    showPage('register');
+  </script>
+</body>
+</html>
